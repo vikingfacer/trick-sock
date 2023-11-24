@@ -1,0 +1,3 @@
+[submodule "AddrParse"]
+	path = AddrParse
+	url = git@github.com:vikingfacer/AddrParse.git

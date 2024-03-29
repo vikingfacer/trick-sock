@@ -20,6 +20,22 @@ pub fn toBytes(comptime t: type, data: anytype) []u8 {
     return std.mem.asBytes(data);
 }
 
+pub const icmpHeader = packed struct {
+    type: u8,
+    code: u8,
+    checksum: u16,
+    roh: u32, //rest of header
+};
+
+pub const ping = packed struct {
+    type: u8,
+    code: u8,
+    checksum: u16,
+    identifier: u16,
+    seqNum: u16,
+    timeStamp: u64,
+};
+
 pub const ipHeader = packed struct {
     LengthAndVersion: u8,
     prioAndTOS: u8,
@@ -31,21 +47,6 @@ pub const ipHeader = packed struct {
     checksum: u16,
     src: u32,
     dst: u32,
-};
-
-pub const icmpHeader = packed struct {
-    type: u8,
-    code: u8,
-    checksum: u16,
-    roh: u32, //rest of header
-    pub const ping = packed struct {
-        type: u8,
-        code: u8,
-        checksum: u16,
-        identifier: u16,
-        seqNum: u16,
-        timeStamp: u64,
-    };
 };
 
 pub const tcpHeader = packed struct {

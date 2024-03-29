@@ -15,6 +15,11 @@ pub fn fromBytes(comptime t: type, data: [*]u8) t {
     return layer;
 }
 
+pub fn toBytes(comptime t: type, data: anytype) []u8 {
+    std.mem.byteSwapAllFields(t, data);
+    return std.mem.asBytes(data);
+}
+
 pub const ipHeader = packed struct {
     LengthAndVersion: u8,
     prioAndTOS: u8,

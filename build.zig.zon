@@ -1,0 +1,21 @@
+// zig struct add name and version of project
+// add dependancies
+.{
+    // the name of your project
+    .name = "zon template",
+    // the version of your project
+    .version = "0.0.0",
+
+    // the actual packages you need as dependencies of your project
+    .dependencies = .{
+        // the name of the package
+        .clap = .{
+            // the url to the release of the module
+            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.7.0.tar.gz",
+            // the hash of the module, this is not the checksum of the tarball
+            .hash ="1220f48518ce22882e102255ed3bcdb7aeeb4891f50b2cdd3bd74b5b2e24d3149ba2",
+        },
+    }
+}
+
+

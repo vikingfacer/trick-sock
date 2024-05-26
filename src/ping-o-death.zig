@@ -4,31 +4,19 @@ const clap = @import("clap");
 
 const etherStruct = @import("etherStruct.zig");
 const addrParse = @import("AddrParse");
+const ArpMap = @import("ArpMap.zig");
 
 const Allocator = std.mem.Allocator;
 
 const ipAndMac = struct { address: u32, mac: u48 };
 
-const ATTACK_TYPE = enum {
-    SMURF,
-    FLOOD,
-};
-
 const AttackOptions = struct {
     mac: ?[]const u8,
     address: ?[]const u8,
-    netmask: ?u8,
-    peer: bool,
-    random: bool,
-    attack: ATTACK_TYPE,
     pub fn init(res: anytype) AttackOptions {
         return AttackOptions{
             .mac = res.args.mac,
             .address = res.args.address,
-            .netmask = res.args.netmask,
-            .peer = res.args.peers != 0,
-            .random = res.args.random != 0,
-            .attack = if (res.positionals.len > 0) res.positionals[0] else ATTACK_TYPE.SMURF,
         };
     }
 };
@@ -37,7 +25,6 @@ pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    _ = allocator;
 
     const params = comptime clap.parseParamsComptime(
         \\-h, --help             specify target's MAC & IP, specify the attack type
@@ -45,16 +32,10 @@ pub fn main() anyerror!void {
         \\                       Default: Smurf w/ peers
         \\-m, --mac <STR>        Target's MAC address
         \\-a, --address <STR>    Target's IP address
-        \\-n, --netmask <UINT>   Target's IP address netmask
-        \\-p, --peers            Use ARP peers
-        \\-r, --random           Use random MAC & IP addresses
-        \\<ATTACK>
     );
 
     const parsers = comptime .{
         .STR = clap.parsers.string,
-        .ATTACK = clap.parsers.enumeration(ATTACK_TYPE),
-        .UINT = clap.parsers.int(u8, 10),
     };
 
     var diag = clap.Diagnostic{};
@@ -70,11 +51,9 @@ pub fn main() anyerror!void {
         return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
     }
     const options = AttackOptions.init(res);
+    var arpmap = ArpMap.ArpMap.init(allocator) catch |err| return err;
 
-    if ((options.random == true) == options.peer) {
-        std.debug.print("Error: Random & Peers are mutually exclusive\n", .{});
-        return;
-    }
+    arpmap.printArpIPMACs();
     return sendLoop(&options);
 }
 
@@ -157,6 +136,16 @@ fn sendLoop(opt: *const AttackOptions) !void {
         }
     }
 }
+
+fn optionsToEther(opts: AttackOptions, ipMacs: ArpMap.ArpMap) !etherStruct.ethFrame {
+    return .{
+        // use find Mac from ArpMap
+        .dst = ipMacs.findMac(opts.address),
+        .src = randomMAC(),
+        .type = 0x0800,
+    };
+}
+
 fn randomMAC() u48 {
     const RndGen = std.rand.DefaultPrng;
     var rnd = RndGen.init(0);
@@ -171,42 +160,4 @@ fn randomAddress() u32 {
 
 fn useArpNeigh() u32 {
     return 0;
-}
-
-pub fn printArpIPMACs(allocator: Allocator) !void {
-    var listof = std.ArrayList(ipAndMac).init(allocator);
-    defer listof.deinit();
-    _ = try getARPMap(&listof);
-    for (try listof.toOwnedSlice()) |ip| {
-        var backingMem: [24:0]u8 = undefined;
-        const ipslice = addrParse.Ipv4ToString(ip.address, &backingMem) catch |err| return err;
-        std.debug.print("{s} ", .{ipslice});
-        const MACslice = addrParse.MACToString(ip.mac, &backingMem) catch |err| return err;
-        std.debug.print("{s} \n", .{MACslice});
-    }
-}
-
-pub fn getARPMap(list: *std.ArrayList(ipAndMac)) !void {
-    var file = std.fs.cwd().openFile("/proc/net/arp", .{}) catch |err| return err;
-    defer file.close();
-
-    var buf_reader = std.io.bufferedReader(file.reader());
-    var in_stream = buf_reader.reader();
-    var buf = [_]u8{0} ** 2048;
-
-    _ = in_stream.readUntilDelimiterOrEof(&buf, '\n') catch |err| return err;
-    while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-        var token_iter = std.mem.tokenizeAny(u8, line, " ");
-        const ip = token_iter.next().?;
-        _ = token_iter.next().?;
-        _ = token_iter.next().?;
-        const mac = token_iter.next().?;
-
-        var ip_pair: ipAndMac = .{ //
-            .address = addrParse.parseIpv4(ip) catch |err| return err, //
-            .mac = addrParse.parseMAC(mac) catch |err| return err,
-        };
-
-        list.append(ip_pair) catch |err| return err;
-    }
 }
